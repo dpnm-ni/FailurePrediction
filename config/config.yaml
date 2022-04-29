@@ -1,0 +1,6 @@
+ni_mon:
+  #host: http://<ni_mon_ip>:<ni_mon_port>
+  host: http://141.223.181.173:8383
+ni_nfvo:
+  #host: http://<ni_nfvo_ip>:<ni_nfvo_port>
+  host: http://141.223.181.173:8181/

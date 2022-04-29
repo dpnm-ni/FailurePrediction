@@ -1,0 +1,4 @@
+model/
+__pycache__/
+swagger_server/__pycache__/
+GAN/

@@ -15,12 +15,69 @@ from gensim.models import KeyedVectors
 import os
 import re
 import random
+import time
 
 local_path='/home/dpnm/tmp/'
-remote_path='/mnt/hdd/log/'
+remote_path='/home/dpnm/log/hosts/'
+server_info_path='/home/dpnm/server_info.yaml'
+
+#read data in real time. 
+def read_current_data(vnf, win_size, use_emptylog=False, add_oov=False):
+    wv= Word2Vec.load('model/embedding_with_log')
+    print(f'Read last {win_size} min of log data of {vnf}')
+    embed_size=100
+    same_limit=5
+    normal_X=[]
+    today=datetime.today().strftime("%m-%d")
+    path_=remote_path+vnf+'/'+today+'/'
+    log_file_list=get_file_list(path_)
+    #print(log_file_list)
+    log_corpus=[]
+    for file_name in log_file_list:
+        if file_name in ['sudo.log', 'CRON.log', 'stress-ng.log']:
+            continue
+        log = download_log(path_,file_name,local_path)
+        if file_name=='kernel.log':
+            log_token = pre_process_error_only(log)
+        else:
+            log_token=pre_process(log)
+        log_corpus.extend(log_token)
+
+    #Delete Same log. This could be dangerous.
+    log_corpus=sorted(list(set(log_corpus)), key= lambda x : x[0])
+    date = datetime.now()-timedelta(minutes=win_size)
+    input_log=[]
+    sentence_pool=[]
+    for log in log_corpus:
+        if date<log[0]:
+            continue
+        if log[0] > date+timedelta(minutes=win_size):
+            break
+        ######If first words are same, it seems similar log. pass it####
+        already_in_sentence_pool=False
+        for sentence in sentence_pool:
+            if sentence==list(log[1])[:same_limit]:
+                already_in_sentence_pool=True
+                break
+        if already_in_sentence_pool:
+            continue
+        sentence_pool.append(list(log[1])[:same_limit])
+        ######Checking similar log end####
+        for word in log[1]:
+            try:
+                input_log.extend(wv.wv.get_vector(word))
+            except:
+                if add_oov:
+                    input_log.extend(np.zeros(embed_size))
+                else:
+                    pass #Do not add OOV
+    if use_emptylog and len(input_log) ==0:
+        input_log=np.zeros(5*embed_size)
+    assert len(input_log)%embed_size==0
+    return input_log
 
 def read_data(vnf, fault_, win_size, gap, date_list, sliding=1, use_emptylog=False):
-    wv= Word2Vec.load('embedding_with_log')
+    wv= Word2Vec.load('model/embedding_with_log')
     embed_size=100
     same_limit=5
     normal_X=[]
@@ -234,12 +291,12 @@ def pre_process_error_only(text):
     return clean
 
 def download_log(remote_path, file_name, local_path):
-    with open ('../server_info.yaml') as f:
+    with open (server_info_path) as f:
         server_info=yaml.load(f)['log']
     try:
         cli=paramiko.SSHClient()
         cli.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-        cli.connect(server_info['ip'], port=22, username=server_info['id'], password=server_info['pwd'])
+        cli.connect(server_info['ip'], port=22, username='root', password=server_info['pwd'])
         with SCPClient(cli.get_transport()) as scp:
             scp.get(remote_path+file_name, local_path)
     except SCPException as e:
@@ -257,11 +314,11 @@ def download_log(remote_path, file_name, local_path):
     return text
 
 def get_file_list(path):
-    with open ('../server_info.yaml') as f:
+    with open (server_info_path) as f:
         server_info=yaml.load(f)['log']
     cli=paramiko.SSHClient()
     cli.set_missing_host_key_policy(paramiko.AutoAddPolicy)
-    cli.connect(server_info['ip'], port=22, username=server_info['id'], password=server_info['pwd'])
+    cli.connect(server_info['ip'], port=22, username='root', password=server_info['pwd'])
     stdin, stdout, stderr = cli.exec_command('ls '+path)
     rslt=stdout.read()
     file_list=rslt.split()
@@ -282,7 +339,7 @@ def date_range(start, end, vnf_name):
 def fault_tagging(vnf_num):
     #Tagging based on Packet Processing Time
     #Not Use
-    with open ('../server_info.yaml') as f:
+    with open (server_info_path) as f:
         server_info=yaml.load(f)['InDB']
     user, password, host = server_info['id'], server_info['pwd'], server_info['ip']
     client=DataFrameClient(host, 8086,user, password, 'pptmon')
@@ -298,7 +355,7 @@ def fault_tagging(vnf_num):
 def get_fault_history(vnf_num):
     print("Get Fault history")
     fault_history={}
-    #with open ('../server_info.yaml') as f:
+    #with open (server_info_path) as f:
     #    server_info=yaml.load(f)['FaultHistory']
     #cli=paramiko.SSHClient()
     #cli.set_missing_host_key_policy(paramiko.AutoAddPolicy)

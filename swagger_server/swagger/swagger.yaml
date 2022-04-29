@@ -1,0 +1,121 @@
+---
+swagger: "2.0"
+info:
+  description: "NI VM Failure Prediction Module for the NI Project."
+  version: "1.0.0"
+  title: "NI Project Failure Prediction Module"
+tags:
+- name: "ni_failure_prediction_module"
+  description: "Predicting VMs' failure states using ML algorithms."
+schemes:
+- "http"
+paths:
+  /get_vnf_info/{prefix}:
+    get:
+      tags:
+      - "VM Failure Prediction"
+      summary: "Get VNFs' basic information that configure SFC"
+      operationId: "get_vnf_info"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "prefix"
+        in: "path"
+        description: "vnf instance name prefix"
+        required: true
+        type: "string"
+      responses:
+        "200":
+          description: "OK"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/VNFInstance"
+      x-swagger-router-controller: "swagger_server.controllers.vm_failure_prediction_controller"
+  /get_failure_prediction_result/{prefix}:
+    get:
+      tags:
+      - "VM Failure Prediction"
+      summary: "Get VNF Failure Prediction Results in Real-Time"
+      operationId: "get_failure_prediction_result"
+      produces:
+      - "application/json"
+      parameters:
+        - name: "prefix"
+          in: "path"
+          description: "VNF instance name prefix"
+          required: true
+          type: "string"
+      responses:
+        "200":
+          description: "OK"
+          schema:
+            type: "string"
+      x-swagger-router-controller: "swagger_server.controllers.vm_failure_prediction_controller"
+
+definitions:
+  NetworkPort:
+    type: "object"
+    properties:
+      port_id:
+        type: "string"
+      port_name:
+        type: "string"
+      network_id:
+        type: "string"
+      ip_addresses:
+        type: "array"
+        items:
+          type: "string"
+    example:
+      port_name: "port_name"
+      network_id: "network_id"
+      ip_addresses:
+      - "ip_addresses"
+      - "ip_addresses"
+      port_id: "port_id"
+  VNFInstance:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      name:
+        type: "string"
+      status:
+        type: "string"
+        description: "state of VNF VM. (ACTIVE, SHUTOFF, ERROR, etc.)"
+      flavor_id:
+        type: "string"
+      node_id:
+        type: "string"
+      ports:
+        type: "array"
+        items:
+          $ref: "#/definitions/NetworkPort"
+    example:
+      flavor_id: "flavor_id"
+      name: "name"
+      id: "id"
+      ports:
+      - port_name: "port_name"
+        network_id: "network_id"
+        ip_addresses:
+        - "ip_addresses"
+        - "ip_addresses"
+        port_id: "port_id"
+      - port_name: "port_name"
+        network_id: "network_id"
+        ip_addresses:
+        - "ip_addresses"
+        - "ip_addresses"
+        port_id: "port_id"
+      status: "status"
+      node_id: "node_id"
+  adInfo:
+    type: "object"
+    properties:
+      vnf_prefix:
+        type: "string"
+externalDocs:
+  description: "Find out more about DPNM NI."
+  url: "http://dpnm.postech.ac.kr/"

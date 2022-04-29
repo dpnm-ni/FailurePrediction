@@ -1,0 +1,15 @@
+connexion == 1.1.15
+python_dateutil == 2.6.0
+setuptools >= 21.0.0
+typing == 3.5.2.2
+werkzeug==0.16.1
+numpy==1.18.3
+pandas==1.1.2
+paramiko==2.7.2
+gensim==4.0.1
+tensorflow==2.3.1
+keras==2.4.3
+
+
+git+https://github.com/dpnm-ni/ni-mano#subdirectory=ni_mon_client_api
+git+https://github.com/dpnm-ni/ni-mano#subdirectory=ni_nfvo_client_api
