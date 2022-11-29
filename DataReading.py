@@ -12,6 +12,9 @@ import paramiko
 from scp import SCPClient, SCPException
 from gensim.models.word2vec import Word2Vec
 from gensim.models import KeyedVectors
+from transformers import AutoTokenizer
+import torch
+from torch.utils.data import SequentialSampler, TensorDataset, DataLoader
 import os
 import re
 import random
@@ -20,14 +23,19 @@ import time
 local_path='/home/dpnm/tmp/'
 remote_path='/home/dpnm/log/hosts/'
 server_info_path='/home/dpnm/server_info.yaml'
+max_seq_length = 50
+max_sent_length=350
 
 #read data in real time. 
-def read_current_data(vnf, win_size, use_emptylog=False, add_oov=False):
-    wv= Word2Vec.load('model/embedding_with_log')
+def read_current_log_for_vnf(vnf, win_size, use_emptylog=False, add_oov=False,use_wv=False):
+    if use_wv:
+        wv= Word2Vec.load('model/embedding_with_log')
+    else:
+        model_name = "bert-base-uncased"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
     print(f'Read last {win_size} min of log data of {vnf}')
     embed_size=100
     same_limit=5
-    normal_X=[]
     today=datetime.today().strftime("%m-%d")
     path_=remote_path+vnf+'/'+today+'/'
     log_file_list=get_file_list(path_)
@@ -74,6 +82,50 @@ def read_current_data(vnf, win_size, use_emptylog=False, add_oov=False):
     if use_emptylog and len(input_log) ==0:
         input_log=np.zeros(5*embed_size)
     assert len(input_log)%embed_size==0
+    return input_log
+
+def read_current_log_BERT(vnf, win_size):
+    print(f'Read last {win_size} min of log data of {vnf}')
+    model_name = "bert-base-uncased"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    same_limit=5
+    today=datetime.today().strftime("%m-%d")
+    today='05-21'
+    path_=remote_path+vnf+'/'+today+'/'
+    log_file_list=get_file_list(path_)
+    log_corpus=[]
+    for file_name in log_file_list:
+        if file_name in ['sudo.log', 'CRON.log', 'stress-ng.log']:
+            continue
+        log = download_log(path_,file_name,local_path)
+        if file_name=='kernel.log':
+            log_token = pre_process_error_only(log)
+        else:
+            log_token=pre_process(log)
+        log_corpus.extend(log_token)
+    #Delete Same log. 
+    log_corpus=sorted(list(set(log_corpus)), key= lambda x : x[0])
+    date = datetime.now()-timedelta(minutes=win_size)
+    date = '05-21 22:15'.strptime('%m-%d %H:%M')
+    input_log=[]
+    sentence_pool=[]
+    for log in log_corpus:
+        if date<log[0]:
+            continue
+        if log[0] > date+timedelta(minutes=win_size):
+            break
+        ######If first words are same, it seems similar log. pass it####
+        already_in_sentence_pool=False
+        for sentence in sentence_pool:
+            if sentence==list(log[1])[:same_limit]:
+                already_in_sentence_pool=True
+                break
+        if already_in_sentence_pool:
+            continue
+        sentence_pool.append(list(log[1])[:same_limit])
+        sentence_token = tokenizer.encode(log[1], is_split_into_words=True,add_special_tokens=True,
+            max_length=max_seq_length, padding="max_length", truncation=True)
+        input_log.append(sentence_token)
     return input_log
 
 def read_data(vnf, fault_, win_size, gap, date_list, sliding=1, use_emptylog=False):
@@ -368,3 +420,56 @@ def get_fault_history(vnf_num):
     with open(local_path+'fault_history.yaml')as f:
         fault_history=yaml.load(f)
     return fault_history[vnf_num]
+
+def generate_data_loader(input_examples, label_masks, batch_size,balance_label_examples = False,use_wv=False):
+    '''
+    Generate a Dataloader given the input examples, eventually masked if they are
+    to be considered NOT labeled.
+    '''
+    sampler = SequentialSampler
+    if use_wv:
+        input_ids = torch.tensor(input_examples,dtype=float)
+        label_id_array = torch.tensor(label_masks)
+        dataset = TensorDataset(input_ids, label_id_array)
+        return DataLoader(
+            dataset,  # The training samples.
+            sampler = sampler(dataset),
+            batch_size = batch_size) # Trains with this batch size.
+
+    examples = []
+    # if required it applies the balance
+    log_mask=[]
+    for index, ex in enumerate(input_examples):
+        examples.append((ex[1], label_masks[index]))
+        log_mask.append(ex[0])
+
+    #-----------------------------------------------
+    # Generate input examples to the Transformer
+    #-----------------------------------------------
+    input_ids = []
+    input_mask_array = []
+    label_id_array = []
+
+    for (token_list, label_mask) in examples:
+        input_ids.append(token_list)
+        att_mask=[]
+        for sentence_token in token_list:
+            att_mask.append( [int(token_id > 0) for token_id in sentence_token])
+        input_mask_array.append(att_mask)
+        label_id_array.append(label_mask)
+
+    # Convertion to Tensor
+    input_ids = torch.tensor(input_ids)
+    input_mask_array = torch.tensor(input_mask_array)
+    label_id_array = torch.tensor(label_id_array, dtype=torch.float16)
+    log_mask= torch.tensor(log_mask)
+
+    # Building the TensorDataset
+    # Still, input_ids is list of token
+    dataset = TensorDataset(input_ids, input_mask_array, label_id_array,log_mask)
+
+    # Building the DataLoader
+    return DataLoader(
+        dataset,  # The training samples.
+        sampler = sampler(dataset),
+        batch_size = batch_size) # Trains with this batch size.

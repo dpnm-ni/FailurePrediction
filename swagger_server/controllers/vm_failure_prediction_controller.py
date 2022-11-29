@@ -24,3 +24,16 @@ def get_failure_prediction_result(prefix):
     result = fp.get_failure_prediction_result(prefix, sfc_vnfs)
 
     return result
+
+def get_failure_prediction_result_for_server(prefix):
+
+    sfc_vnfs = ["1_Firewall", "2_ntopng", "3_Haproxy_2"]
+    result = fp.get_failure_prediction_result_for_server(prefix, sfc_vnfs)
+
+    return result
+def get_vm_log(prefix):
+
+    sfc_vnfs = ["1_Firewall", "2_ntopng", "3_Haproxy_2"]
+    result = fp.get_vm_log(prefix, sfc_vnfs)
+
+    return result

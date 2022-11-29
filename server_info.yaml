@@ -1,0 +1,5 @@
+- name: server
+  server: dpnm-82-225
+- name: 225-4c-1
+  server: dpnm-82-225
+

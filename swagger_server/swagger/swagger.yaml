@@ -52,6 +52,46 @@ paths:
           schema:
             type: "string"
       x-swagger-router-controller: "swagger_server.controllers.vm_failure_prediction_controller"
+  /get_failure_prediction_result_for_server/{prefix}:
+    get:
+      tags:
+      - "VM Failure Prediction"
+      summary: "Get VNF Failure Prediction Results for server in Real-Time"
+      operationId: "get_failure_prediction_result_for_server"
+      produces:
+      - "application/json"
+      parameters:
+        - name: "prefix"
+          in: "path"
+          description: "Server name prefix"
+          required: true
+          type: "string"
+      responses:
+        "200":
+          description: "OK"
+          schema:
+            type: "string"
+      x-swagger-router-controller: "swagger_server.controllers.vm_failure_prediction_controller"
+  /vm_log_monitoring/{prefix}:
+    get:
+      tags:
+      - "VM Failure Prediction"
+      summary: "Get VM Logs in Real-Time"
+      operationId: "get_vm_log"
+      produces:
+      - "application/json"
+      parameters:
+        - name: "prefix"
+          in: "path"
+          description: "VNF instance name prefix"
+          required: true
+          type: "string"
+      responses:
+        "200":
+          description: "OK"
+          schema:
+            type: "string"
+      x-swagger-router-controller: "swagger_server.controllers.vm_failure_prediction_controller"
 
 definitions:
   NetworkPort:
